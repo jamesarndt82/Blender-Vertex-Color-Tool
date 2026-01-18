@@ -6,18 +6,11 @@ A lightweight Blender add-on for editing **Color Attributes (vertex colors)** in
 * Mesh objects with **Color Attributes** (the add-on will create one if missing)
 
 ## Installation
-### Option A: Install from a `.py` file
+### Install from `.py` file
 1. Download `Vertex_Color_Tool.py` (or whatever you named the script).
 2. In Blender: **Edit → Preferences → Add-ons**
 3. Click **Install…**
 4. Select the `.py` file and click **Install Add-on**
-5. Enable the add-on by checking the box next to **Vertex Color Tools**
-
-### Option B: Install from a `.zip` (recommended for releases)
-1. Download the `.zip` release from GitHub.
-2. In Blender: **Edit → Preferences → Add-ons**
-3. Click **Install…**
-4. Select the `.zip` and click **Install Add-on**
 5. Enable the add-on by checking the box next to **Vertex Color Tools**
 
 ## Where to Find It
