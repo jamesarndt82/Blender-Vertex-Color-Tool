@@ -34,7 +34,7 @@ If the selected mesh does not already contain a compatible Color Attribute, the 
 
 ### Install from `.py` File
 
-1. Download the Vertex Color Toolbox `.py` file.
+1. Download the **vertex_color_toolbox_blender_5_2.py** file.
 2. In Blender, open **Edit → Preferences → Add-ons**.
 3. Open the Add-ons menu and choose **Install from Disk**.
 4. Select the `.py` file.
