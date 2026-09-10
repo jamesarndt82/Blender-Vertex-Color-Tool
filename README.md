@@ -1,9 +1,19 @@
 # Vertex Color Toolbox (Blender 5.2)
 
-<p align="left">
-  <img src="https://github.com/user-attachments/assets/005c4e12-c085-449d-ae46-1e1383780a3a" height="420" alt="Vertex Color Toolbox Panel">
-  <img src="https://github.com/user-attachments/assets/d3204e13-5084-4ecb-99ef-1460623a49c9" height="420" alt="Vertex Color Toolbox Viewport">
-</p>
+<table>
+  <tr>
+    <td align="center">
+      <img src="https://github.com/user-attachments/assets/005c4e12-c085-449d-ae46-1e1383780a3a"
+           height="340"
+           alt="Vertex Color Toolbox Panel">
+    </td>
+    <td align="center">
+      <img src="https://github.com/user-attachments/assets/d3204e13-5084-4ecb-99ef-1460623a49c9"
+           height="340"
+           alt="Vertex Color Toolbox Viewport">
+    </td>
+  </tr>
+</table>
 
 A compact Blender add-on for working with **Color Attributes (vertex colors)** directly on mesh objects.
 
