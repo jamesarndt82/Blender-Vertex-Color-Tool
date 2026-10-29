@@ -32,7 +32,15 @@ If the selected mesh does not contain a compatible Color Attribute, use the **+*
 
 ## Installation
 
-### Install from `.py` File
+### Recommended: install the extension ZIP
+
+Download `vertex_color_toolbox-2.5.1.zip` from a development build artifact or a GitHub Release (once published). In Blender 5.2+, open **Edit → Preferences → Get Extensions**, select the menu in the top-right, and choose **Install from Disk**. Select the ZIP file directly; **do not unzip it**. Enable the add-on if Blender prompts you.
+
+The **same GPL-3.0-or-later ZIP** is intended for both personal installations and submission to the official Blender Extensions platform. Once accepted there, use Blender's **Get Extensions** browser to install and update it normally.
+
+When upgrading, disable and remove the older standalone `.py` add-on first if you installed it previously, to prevent duplicate UI panels or operator registrations. Save your work before upgrading.
+
+### Alternative: install from `.py` File
 
 1. Download the **vertex_color_toolbox_blender_5_2.py** file.
 2. In Blender, open **Edit → Preferences → Add-ons**.
@@ -370,4 +378,27 @@ Vertex Color Toolbox is useful for authoring data such as:
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+**GPL-3.0-or-later** — see [LICENSE](LICENSE).
+
+Copyright © 2026 James Arndt.
+
+Versions previously distributed under MIT remain available under their original terms; the historical MIT license text is archived at [packaging/MIT-license-prior-to-2.5.1.txt](packaging/MIT-license-prior-to-2.5.1.txt). The current source code and all newly built extension ZIPs use GPL-3.0-or-later.
+
+## Build and submit to Blender Extensions
+
+Build a single ZIP from the existing add-on source:
+
+```powershell
+cd D:\Projects\Blender-Vertex-Color-Tool
+git switch development
+git pull
+$Blender = "C:\Program Files\Blender Foundation\Blender 5.2\blender.exe"
+python tools/build_extension.py --blender $Blender
+& $Blender --background --factory-startup --python tests\blender_extension_smoke.py
+```
+
+The resulting file is `dist/vertex_color_toolbox-2.5.1.zip`. The builder validates the GPL manifest, source SPDX header, version match, full GPL license, and packaged source. With `--blender` it also runs Blender's official extension validator and packager.
+
+After the package smoke test, install the ZIP through Blender's **Get Extensions → Install from Disk** interface and check the sidebar interactively. For an official public listing, upload that validated ZIP at [Blender Extensions submission](https://extensions.blender.org/submit/), and provide screenshots, a user-facing description, and any requested metadata. Uploading and final publication are intentionally manual; no workflow submits or publishes the extension automatically.
+
+GitHub Actions builds the same GPL-licensed ZIP for the `development` branch. The GitHub release workflow only prepares an unpublished draft after an explicit version tag.
