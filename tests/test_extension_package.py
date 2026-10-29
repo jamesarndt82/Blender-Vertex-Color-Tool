@@ -1,5 +1,6 @@
 """Standard-library packaging tests; no Blender installation required."""
 import ast
+import importlib.util
 from pathlib import Path
 import subprocess
 import sys
@@ -7,6 +8,7 @@ import tempfile
 import tomllib
 import unittest
 import zipfile
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -14,6 +16,11 @@ BUILDER = ROOT / "tools" / "build_extension.py"
 MANIFEST = ROOT / "blender_manifest.toml"
 SOURCE = ROOT / "vertex_color_toolbox_blender_5_2.py"
 EXPECTED = {"__init__.py", "blender_manifest.toml", "LICENSE"}
+
+
+spec = importlib.util.spec_from_file_location("extension_zip_builder", BUILDER)
+builder = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(builder)
 
 
 class ExtensionPackageTests(unittest.TestCase):
@@ -56,12 +63,31 @@ class ExtensionPackageTests(unittest.TestCase):
             )
             with zipfile.ZipFile(archive) as z:
                 self.assertEqual(set(z.namelist()), EXPECTED)
-                self.assertEqual(z.read("__init__.py"), SOURCE.read_bytes())
-                self.assertEqual(z.read("LICENSE"), (ROOT / "LICENSE").read_bytes())
+                self.assertEqual(z.read("__init__.py"), builder.normalized_text_bytes(SOURCE))
+                self.assertEqual(z.read("LICENSE"), builder.normalized_text_bytes(ROOT / "LICENSE"))
                 self.assertEqual(z.testzip(), None)
             second = right / archive.name
             self.assertEqual(archive.read_bytes(), second.read_bytes(),
                              "ZIP must reproduce identically")
+
+    def test_windows_crlf_checkout_and_utf8_bom_build_success(self):
+        # Git may convert files to CRLF on Windows. Packages must stay LF.
+        with tempfile.TemporaryDirectory() as directory:
+            temp = Path(directory)
+            windows_source = temp / "windows_source.py"
+            source = builder.normalized_text_bytes(SOURCE)
+            windows_source.write_bytes(
+                bytes((0xef, 0xbb, 0xbf))
+                + source.replace(bytes((10,)), bytes((13, 10)))
+            )
+            with patch.object(builder, "SOURCE", windows_source):
+                self.assertEqual(builder.info()["version"], "2.5.1")
+                self.assertEqual(builder.files()["__init__.py"], source)
+                archive = temp / "windows-normalized.zip"
+                builder.build_python_zip(archive)
+                builder.verify(archive)
+                with zipfile.ZipFile(archive) as z:
+                    self.assertEqual(z.read("__init__.py"), source)
 
     def test_bad_zip_is_rejected(self):
         with tempfile.TemporaryDirectory() as directory:
