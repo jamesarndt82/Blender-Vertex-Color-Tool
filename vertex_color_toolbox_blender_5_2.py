@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Vertex Color Toolbox",
     "author": "James Arndt",
-    "version": (2, 4, 0),
+    "version": (2, 4, 1),
     "blender": (5, 2, 0),
     "location": "3D View > Sidebar > VColor",
     "description": "Compact Edit Mode vertex-color workflow inspired by 3ds Max VertexPaint",
@@ -203,9 +203,9 @@ def get_safe_active_color_attribute(mesh):
 
 
 def _preview_material_target_object(settings):
-    if not settings.material_preview_object_name:
-        return None
-    return bpy.data.objects.get(settings.material_preview_object_name)
+    # Pointer survives renaming; the name supports previews from older files.
+    return (settings.material_preview_object
+            or bpy.data.objects.get(settings.material_preview_object_name))
 
 
 def _get_material_preview_attribute_name(obj, settings):
@@ -239,15 +239,21 @@ def _get_material_preview_attribute_name(obj, settings):
     return None
 
 
-def _ensure_material_preview_material(attribute_name):
-    """Create/update the temporary preview material."""
-    mat = bpy.data.materials.get(_VCT_MATERIAL_PREVIEW_MATERIAL_NAME)
+def _ensure_material_preview_material(attribute_name, existing=None):
+    """Create an owned material, or update only the owned attribute node."""
+    if existing is not None:
+        if not existing.use_nodes:
+            return None
+        node = existing.node_tree.nodes.get("VCT_ColorAttribute")
+        if node is None:
+            return None
+        if node.layer_name != attribute_name:
+            node.layer_name = attribute_name
+        return existing
 
-    if mat is None:
-        mat = bpy.data.materials.new(_VCT_MATERIAL_PREVIEW_MATERIAL_NAME)
-
+    # Never look up and overwrite an unrelated material with the same name.
+    mat = bpy.data.materials.new(_VCT_MATERIAL_PREVIEW_MATERIAL_NAME)
     mat.use_nodes = True
-    mat.use_fake_user = True
 
     nodes = mat.node_tree.nodes
     links = mat.node_tree.links
@@ -286,6 +292,20 @@ def _ensure_material_preview_material(attribute_name):
     return mat
 
 
+def _clear_material_preview_state(scene):
+    settings = scene.vct_settings
+    owned_material = settings.material_preview_material
+    settings.material_preview_active = False
+    settings.material_preview_object = None
+    settings.material_preview_object_name = ""
+    settings.material_preview_attribute_name = ""
+    settings.material_preview_original_slot_count = 0
+    settings.material_preview_material = None
+    scene.vct_material_preview_slots.clear()
+    if owned_material is not None and owned_material.users == 0:
+        bpy.data.materials.remove(owned_material)
+
+
 def _restore_material_preview(context):
     """Restore the object's original material assignments and viewport shading."""
     settings = context.scene.vct_settings
@@ -296,11 +316,7 @@ def _restore_material_preview(context):
     obj = _preview_material_target_object(settings)
 
     if not obj or obj.type != 'MESH':
-        settings.material_preview_active = False
-        settings.material_preview_object_name = ""
-        settings.material_preview_attribute_name = ""
-        settings.material_preview_original_slot_count = 0
-        context.scene.vct_material_preview_slots.clear()
+        _clear_material_preview_state(context.scene)
         return False, "Material preview object is no longer available."
 
     stored_slots = context.scene.vct_material_preview_slots
@@ -323,12 +339,10 @@ def _restore_material_preview(context):
                     if material is None and saved.material_name:
                         material = bpy.data.materials.get(saved.material_name)
 
-                    slot.material = material
-
-        # If the object originally had no slots, remove the temporary slot.
-        elif len(obj.material_slots) > 0:
-            # The preview only adds a slot in the zero-slot case.
-            obj.data.materials.clear()
+                    # DATA-linked slots use the untouched mesh material.
+                    # Never rewrite underlying shared mesh data on restore.
+                    if saved.link == 'OBJECT':
+                        slot.material = material
 
         # Restore the viewport shading type used before preview.
         if (
@@ -348,12 +362,7 @@ def _restore_material_preview(context):
     except Exception as ex:
         return False, str(ex)
 
-    settings.material_preview_active = False
-    settings.material_preview_object_name = ""
-    settings.material_preview_attribute_name = ""
-    settings.material_preview_original_slot_count = 0
-    stored_slots.clear()
-
+    _clear_material_preview_state(context.scene)
     return True, ""
 
 
@@ -375,16 +384,13 @@ def _sync_material_preview_attribute(context):
     if not attribute_name:
         return
 
-    mat = _ensure_material_preview_material(attribute_name)
+    # Synchronization must not rebuild nodes or change user's material slots.
+    mat = _ensure_material_preview_material(
+        attribute_name, settings.material_preview_material
+    )
+    if mat is None:
+        return
     settings.material_preview_attribute_name = attribute_name
-
-    # Re-assert the preview material in case a slot changed while previewing.
-    for slot in obj.material_slots:
-        try:
-            slot.link = 'OBJECT'
-        except Exception:
-            pass
-        slot.material = mat
 
     for area in context.screen.areas:
         if area.type == 'VIEW_3D':
@@ -416,6 +422,12 @@ def _toggle_material_preview(context):
     if not attribute_name:
         return False, "Choose or create a Face Corner Color Attribute first."
 
+    if not obj.material_slots:
+        return False, (
+            "Material Preview needs an existing material slot. "
+            "Use Solid Colors, or add a material slot first."
+        )
+
     stored_slots = context.scene.vct_material_preview_slots
     stored_slots.clear()
 
@@ -427,28 +439,21 @@ def _toggle_material_preview(context):
         item.link = slot.link
 
     settings.material_preview_active = True
+    settings.material_preview_object = obj
     settings.material_preview_object_name = obj.name
     settings.material_preview_attribute_name = attribute_name
     settings.material_preview_original_slot_count = len(obj.material_slots)
 
-    preview_mat = _ensure_material_preview_material(attribute_name)
-
-    if len(obj.material_slots) == 0:
-        # Zero-slot objects need one temporary slot for Material Preview.
-        obj.data.materials.append(preview_mat)
-        try:
-            obj.material_slots[0].link = 'OBJECT'
-        except Exception:
-            pass
-    else:
-        # OBJECT link prevents changing the underlying mesh material data for
-        # existing slots, which is safer for meshes shared by multiple objects.
+    try:
+        preview_mat = _ensure_material_preview_material(attribute_name)
+        settings.material_preview_material = preview_mat
+        # Object-linked slots cannot mutate materials of mesh-linked instances.
         for slot in obj.material_slots:
-            try:
-                slot.link = 'OBJECT'
-            except Exception:
-                pass
+            slot.link = 'OBJECT'
             slot.material = preview_mat
+    except Exception as ex:
+        _restore_material_preview(context)
+        return False, "Could not start Material Preview: " + str(ex)
 
     # Enter Material Preview and remember the previous viewport shading type.
     if (
@@ -1304,6 +1309,16 @@ class VCT_Settings(PropertyGroup):
     material_preview_active: BoolProperty(
         name="Material Preview Colors",
         default=False,
+        options={'HIDDEN'},
+    )
+
+    material_preview_object: PointerProperty(
+        type=bpy.types.Object,
+        options={'HIDDEN'},
+    )
+
+    material_preview_material: PointerProperty(
+        type=bpy.types.Material,
         options={'HIDDEN'},
     )
 
