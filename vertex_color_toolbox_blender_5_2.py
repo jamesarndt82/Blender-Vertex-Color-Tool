@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Vertex Color Toolbox",
     "author": "James Arndt",
-    "version": (2, 4, 1),
+    "version": (2, 5, 0),
     "blender": (5, 2, 0),
     "location": "3D View > Sidebar > VColor",
     "description": "Compact Edit Mode vertex-color workflow inspired by 3ds Max VertexPaint",
@@ -11,6 +11,7 @@ bl_info = {
 import bpy
 import bmesh
 import colorsys
+from array import array
 
 from bpy.app.handlers import persistent
 from mathutils import Color
@@ -130,7 +131,7 @@ def _get_material_preview_attribute_name(obj, settings):
     # If HSV Live Preview is active, display the temporary preview attribute.
     if (
         settings.preview_active
-        and settings.preview_object_name == obj.name
+        and _preview_target_object(settings) == obj
         and settings.preview_temp_name
     ):
         temp = mesh.color_attributes.get(settings.preview_temp_name)
@@ -559,19 +560,24 @@ def get_effective_edit_mode(context):
 
 
 def get_selected_loops(bm, edit_mode):
-    """Get face-corner data affected by the current artist-facing edit mode."""
-    loops = []
+    """Collect selected corners with a single face pass.
 
+    Traversing every selected vertex's linked faces repeated work on dense
+    selections. A face pass handles hard corner boundaries and hidden faces
+    while visiting each affected corner only once.
+    """
+    loops = []
     if edit_mode == 'FACE':
         for face in bm.faces:
             if face.select and not face.hide:
                 loops.extend(face.loops)
-        return loops
-
-    for vert in bm.verts:
-        if vert.select and not vert.hide:
-            loops.extend(loops_for_vertex(bm, vert))
-
+    else:
+        for face in bm.faces:
+            if face.hide:
+                continue
+            for loop in face.loops:
+                if loop.vert.select and not loop.vert.hide:
+                    loops.append(loop)
     return loops
 
 
@@ -598,17 +604,31 @@ def fill_selection_with_color(context, color):
         element = "faces" if edit_mode == 'FACE' else "vertices"
         return False, f"No {element} are selected."
 
-    target = tuple(color)
+    strength = settings.strength
+    if strength <= 0.0:
+        return True, ""
 
-    for loop in loops:
-        existing = color_from_bmesh(attr, tuple(loop[layer]))
-        result = mix_color(
-            existing,
-            target,
-            settings.strength,
-            settings.affect_alpha,
-        )
-        loop[layer] = color_to_bmesh(attr, result)
+    target = tuple(color)
+    if strength >= 1.0:
+        # The final color does not depend on the existing RGB. Convert the
+        # working color once, not once per face corner.
+        encoded = color_to_bmesh(attr, target)
+        if settings.affect_alpha:
+            for loop in loops:
+                loop[layer] = encoded
+        else:
+            rgb = encoded[:3]
+            for loop in loops:
+                old_alpha = loop[layer][3]
+                loop[layer] = (rgb[0], rgb[1], rgb[2], old_alpha)
+    else:
+        # Preserve the existing scene-linear blend semantics for partial
+        # strength, including Byte Color attributes.
+        affect_alpha = settings.affect_alpha
+        for loop in loops:
+            existing = color_from_bmesh(attr, tuple(loop[layer]))
+            result = mix_color(existing, target, strength, affect_alpha)
+            loop[layer] = color_to_bmesh(attr, result)
 
     bmesh.update_edit_mesh(mesh, loop_triangles=False, destructive=False)
     return True, ""
@@ -810,28 +830,26 @@ def _apply_adjust_preview(context):
         pass
 
     if obj.mode == 'OBJECT':
-        # Object Mode previews the entire active color attribute.
+        # Read/write contiguous arrays instead of making one Blender RNA call
+        # per face corner. HSV math still comes from the untouched source.
         if len(source.data) != len(temp.data):
             _remove_preview_attribute(settings)
             return False, "Preview and source Color Attributes no longer match."
 
-        for index in range(len(source.data)):
-            original = tuple(source.data[index].color)
-
+        values = array('f', [0.0]) * (4 * len(source.data))
+        source.data.foreach_get("color", values)
+        hue = settings.adjust_hue
+        saturation = settings.adjust_saturation
+        value = settings.adjust_value
+        for index in range(0, len(values), 4):
             rgb = adjust_rgb(
-                original[:3],
-                settings.adjust_hue,
-                settings.adjust_saturation,
-                settings.adjust_value,
+                values[index:index + 3], hue, saturation, value
             )
+            values[index] = rgb[0]
+            values[index + 1] = rgb[1]
+            values[index + 2] = rgb[2]
 
-            temp.data[index].color = (
-                rgb[0],
-                rgb[1],
-                rgb[2],
-                original[3],
-            )
-
+        temp.data.foreach_set("color", values)
         mesh.update()
 
     else:
@@ -1029,9 +1047,10 @@ def _commit_adjust_preview(context):
         if len(source.data) != len(temp.data):
             return False, "Preview and source Color Attributes no longer match."
 
-        # Commit the temporary preview into the real source attribute.
-        for index in range(len(source.data)):
-            source.data[index].color = temp.data[index].color
+        # Commit with bulk RNA access, preserving alpha and storage type.
+        values = array('f', [0.0]) * (4 * len(temp.data))
+        temp.data.foreach_get("color", values)
+        source.data.foreach_set("color", values)
 
         mesh.color_attributes.remove(temp)
         set_active_color_attribute(mesh, source)
@@ -1360,8 +1379,9 @@ class VCT_OT_create_attribute(Operator):
                 domain='CORNER',
             )
 
-            for element in attr.data:
-                element.color = (1.0, 1.0, 1.0, 1.0)
+            # Initialize in one bulk write rather than one RNA call/corner.
+            whites = array('f', [1.0]) * (4 * len(attr.data))
+            attr.data.foreach_set("color", whites)
 
             set_active_color_attribute(mesh, attr)
 
