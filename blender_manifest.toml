@@ -7,7 +7,5 @@ maintainer = "James Arndt"
 type = "add-on"
 website = "https://github.com/jamesarndt82/Blender-Vertex-Color-Tool"
 blender_version_min = "5.2.0"
-license = ["SPDX:MIT"]
-
-# This manifest is for GitHub-distributed installation ZIPs.
-# The official Blender Extensions Platform currently requires GPL licensing.
+license = ["SPDX:GPL-3.0-or-later"]
+copyright = ["2026 James Arndt"]
