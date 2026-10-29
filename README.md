@@ -17,7 +17,7 @@
 
 A compact Blender add-on for working with **Color Attributes (vertex colors)** directly on mesh objects.
 
-The workflow is inspired by the simplicity of **3ds Max VertexPaint**: choose a color, choose whether you are working with faces or vertices, control the strength, and fill the current selection.
+The workflow is inspired by the simplicity of **3ds Max VertexPaint**: choose a color, switch between Face or Vertex selection with one control, adjust strength, and fill the current selection.
 
 The toolbox uses Blender's modern **Color Attribute** system and is designed primarily for game-art workflows such as vertex tinting, masks, variation, gradients, and shader data.
 
@@ -57,7 +57,9 @@ In the 3D Viewport:
 5. Click the native Blender color swatch and choose a color.
 6. Set the **Strength**.
 7. Select faces or vertices.
-8. Click **Fill Selection**.
+8. Click **Fill Selected Faces** or **Fill Selected Vertices**.
+
+The Face/Vertex buttons now also enter Edit Mode if needed. If an operation cannot run, its control is disabled, and the panel displays the next required step.
 
 To see vertex colors directly, open **Display → Solid Colors**. Enabling the add-on will not change your viewport shading.
 
@@ -182,7 +184,7 @@ Available controls:
 
 ### Live Preview
 
-Live Preview shows color adjustments on the mesh before they are committed.
+Click **Start Live Preview** to see color adjustments before committing them. While previewing, click **Commit Preview** to keep the result or **Cancel** to discard it. Without a preview, **Apply Adjustment** performs a one-shot adjustment.
 
 The original Color Attribute remains untouched until **Apply** is pressed.
 
@@ -241,7 +243,7 @@ The Color Attribute selector at the top of the toolbox lets you switch between C
 Controls beside the selector allow you to:
 
 * Create a new Color Attribute
-* Delete the active Color Attribute
+* Delete the active Color Attribute after confirming the operation
 * Switch between existing Color Attributes
 
 The toolbox keeps its active Color Attribute synchronized with Blender's native **Object Data Properties → Color Attributes** panel.
@@ -271,13 +273,30 @@ The toolbox does **not** create attributes when selecting objects, opening files
 
 ### Testing
 
-The Python-only GitHub Actions checks compile the add-on and verify static safety contracts. These checks do **not** prove Blender runtime compatibility. For a clean Blender 5.2+ integration test, run:
+The Python-only GitHub Actions checks compile the add-on and verify static safety contracts. These checks do **not** prove Blender runtime compatibility. For clean Blender 5.2+ integration tests, run:
 
 ```bash
 blender --background --factory-startup --python tests/blender_phase1_smoke.py
+blender --background --factory-startup --python tests/blender_phase2_smoke.py
 ```
 
-The smoke test covers explicit attribute setup, shared meshes, material restoration after object renaming, HSV preview cancellation, and saving during previews.
+The Phase 1 smoke test covers explicit attribute setup, shared meshes, material restoration after object renaming, HSV preview cancellation, and saving during previews.
+
+The Phase 2 smoke test covers Byte/Float attribute initialization, full-strength face and vertex fills, alpha preservation, bulk HSV preview and commit accuracy.
+
+On Windows PowerShell, replace `blender` with `& "C:\\Program Files\\Blender Foundation\\Blender 5.2\\blender.exe"` and run each command separately.
+
+### Version 2.5.0 (development)
+
+- Single Face/Vertex selector in the main panel
+- Clearer disabled controls and contextual setup guidance
+- Confirmation before deleting color attributes
+- Faster full-strength fills that convert the working color once
+- Single-pass BMesh corner collection for vertex selection
+- Bulk Blender RNA reads/writes for Object Mode HSV preview, commit, and new attribute initialization
+- Correct material-preview tracking even after object renaming
+
+Performance and compatibility should be measured inside Blender; the Phase 2 code is not yet a released or benchmarked build.
 
 ## Advanced
 
