@@ -2152,8 +2152,11 @@ class VCT_PT_main(Panel):
             VCT_MT_color_attributes.bl_idname,
             text=attribute_label,
         )
-        row.operator("vct.create_attribute", text="", icon='ADD')
+        row.operator("vct.create_attribute", text="New", icon='ADD')
         row.operator("vct.delete_attribute", text="", icon='REMOVE')
+
+        if not active:
+            layout.label(text="No color data yet. Click New to begin.", icon='INFO')
 
         if active and active.domain != 'CORNER':
             warning = layout.row()
