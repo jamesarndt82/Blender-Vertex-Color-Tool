@@ -2170,15 +2170,16 @@ class VCT_PT_main(Panel):
             layout.label(text="Select a mesh object.", icon='INFO')
             return
 
-        row = layout.row(align=True)
-        row.operator("vct.enter_face_mode", text="Face Mode", icon='FACESEL')
-        row.operator("vct.enter_vertex_mode", text="Vertex Mode", icon='VERTEXSEL')
-        layout.separator()
-        
-        # Panel drawing is intentionally read-only. Automatic mesh/view setup
-        # is handled by registration and active-object notifications.
+        # Drawing does not modify scene data or viewport configuration.
         attrs = obj.data.color_attributes
         active = get_safe_active_color_attribute(obj.data)
+        display_attr = (
+            attrs.get(settings.preview_source_name)
+            if settings.preview_active else active
+        )
+        has_color_data = bool(display_attr and display_attr.domain == 'CORNER')
+        edit_ready = obj.mode == 'EDIT' and has_color_data
+        paint_ready = edit_ready and not settings.preview_active
 
         if settings.preview_active and settings.preview_source_name:
             attribute_label = f"{settings.preview_source_name}  (Preview)"
@@ -2190,47 +2191,52 @@ class VCT_PT_main(Panel):
             VCT_MT_color_attributes.bl_idname,
             text=attribute_label,
         )
-        row.operator("vct.create_attribute", text="New", icon='ADD')
-        row.operator("vct.delete_attribute", text="", icon='REMOVE')
+        add = row.row(align=True)
+        add.enabled = not settings.preview_active
+        add.operator("vct.create_attribute", text="New", icon='ADD')
+        remove = row.row(align=True)
+        remove.enabled = bool(display_attr and not settings.preview_active)
+        remove.operator("vct.delete_attribute", text="", icon='REMOVE')
 
-        if not active:
-            layout.label(text="No color data yet. Click New to begin.", icon='INFO')
-
-        if active and active.domain != 'CORNER':
+        if display_attr is None:
+            layout.label(text="No color data. Click New to begin.", icon='INFO')
+        elif display_attr.domain != 'CORNER':
             warning = layout.row()
             warning.alert = True
-            warning.label(text="Active attribute is not Face Corner data.", icon='ERROR')
+            warning.label(text="Choose a Face Corner color attribute.", icon='ERROR')
 
-        layout.prop(settings, "working_color", text="Color")
-        layout.prop(settings, "strength", slider=True)
-
+        layout.label(text="Selection Mode")
         row = layout.row(align=True)
         effective_mode = get_effective_edit_mode(context)
-
-        op = row.operator(
-            "vct.set_edit_mode",
-            text="Face",
-            depress=effective_mode == 'FACE',
-            icon='FACESEL',
+        row.operator(
+            "vct.enter_face_mode", text="Face", icon='FACESEL',
+            depress=effective_mode == 'FACE' and obj.mode == 'EDIT',
         )
-        op.mode = 'FACE'
-
-        op = row.operator(
-            "vct.set_edit_mode",
-            text="Vertex",
-            depress=effective_mode == 'VERTEX',
-            icon='VERTEXSEL',
+        row.operator(
+            "vct.enter_vertex_mode", text="Vertex", icon='VERTEXSEL',
+            depress=effective_mode == 'VERTEX' and obj.mode == 'EDIT',
         )
-        op.mode = 'VERTEX'
+
+        layout.prop(settings, "working_color", text="Working Color")
+        layout.prop(settings, "strength", slider=True)
+
+        if obj.mode != 'EDIT':
+            layout.label(text="Choose Face or Vertex to start editing.", icon='INFO')
+        elif settings.preview_active:
+            layout.label(text="Apply or Cancel preview before painting.", icon='INFO')
 
         col = layout.column(align=True)
+        col.enabled = paint_ready
         col.scale_y = 1.25
-        col.operator("vct.fill_selection", text="Fill Selection", icon='CHECKMARK')
-
-        layout.operator(
+        col.operator(
+            "vct.fill_selection",
+            text="Fill Selected Faces" if effective_mode == 'FACE'
+            else "Fill Selected Vertices",
+            icon='CHECKMARK',
+        )
+        col.operator(
             "vct.sample_selection",
-            text="Sample Selected",
-            icon='EYEDROPPER',
+            text="Sample Selected Color", icon='EYEDROPPER',
         )
 
         # --------------------------------------------------------------
