@@ -10,6 +10,7 @@ from pathlib import Path
 from statistics import median
 from time import perf_counter
 import importlib.util
+import os
 
 import bpy
 import bmesh
@@ -27,15 +28,21 @@ def measured(label, fn, repeats=3):
         start = perf_counter()
         fn()
         measurements.append(perf_counter() - start)
-    print(f"VCT BENCH {label}: {median(measurements)*1000:.2f} ms "
+    elapsed = median(measurements)
+    print(f"VCT BENCH {label}: {elapsed*1000:.2f} ms "
           f"(median of {repeats})")
+    return elapsed
 
 
 vct.register()
 try:
     mesh = bpy.data.meshes.new("VCT Benchmark Mesh")
     bm = bmesh.new()
-    bmesh.ops.create_grid(bm, x_segments=160, y_segments=160, size=10)
+    # 160 -> 102,400 corners; 500 -> 1,000,000 corners.
+    segments = int(os.environ.get("VCT_BENCH_GRID", "160"))
+    if not 8 <= segments <= 750:
+        raise ValueError("VCT_BENCH_GRID must be between 8 and 750")
+    bmesh.ops.create_grid(bm, x_segments=segments, y_segments=segments, size=10)
     bm.to_mesh(mesh)
     bm.free()
     mesh.update()
@@ -80,7 +87,27 @@ try:
     settings.adjust_hue = 0.25
     ok, message = vct._start_adjust_preview(bpy.context)
     assert ok, message
-    measured("HSV preview refresh", lambda: vct._apply_adjust_preview(bpy.context))
+    # Run identical Blender API work with scalar and vectorized conversion.
+    # Disable NumPy only inside this benchmark to measure the real fallback.
+    numpy_module = vct._np
+    try:
+        vct._np = None
+        scalar = measured(
+            "HSV scalar reference",
+            lambda: vct._apply_adjust_preview(bpy.context),
+        )
+    finally:
+        vct._np = numpy_module
+
+    optimized = measured(
+        "HSV optimized refresh",
+        lambda: vct._apply_adjust_preview(bpy.context),
+    )
+    if numpy_module is not None and optimized > 0:
+        print(f"VCT BENCH HSV speedup: {scalar / optimized:.2f}x")
+    else:
+        print("VCT BENCH NumPy unavailable; scalar fallback used")
+
     vct._cancel_adjust_preview(bpy.context)
 
     print("VCT PHASE 2 BENCHMARK: COMPLETE (informational only)")
