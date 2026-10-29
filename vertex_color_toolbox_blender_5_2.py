@@ -2247,6 +2247,7 @@ class VCT_PT_main(Panel):
         header.label(text="Selection")
 
         if body:
+            body.enabled = edit_ready and not settings.preview_active
             row = body.row(align=True)
 
             op = row.operator("vct.select_similar", text="Select Similar")
@@ -2289,7 +2290,9 @@ class VCT_PT_main(Panel):
 
             row = body.row(align=True)
             row.operator("vct.palette_use", text="Use")
-            row.operator("vct.palette_fill", text="Fill Selection")
+            fill_row = row.row(align=True)
+            fill_row.enabled = paint_ready
+            fill_row.operator("vct.palette_fill", text="Fill Selection")
 
             if not scene.vct_palette:
                 body.operator("vct.palette_defaults", text="Create Starter Palette")
@@ -2312,10 +2315,11 @@ class VCT_PT_main(Panel):
             body.prop(settings, "adjust_value", slider=True)
 
             preview_row = body.row()
+            preview_row.enabled = has_color_data and obj.mode in {'OBJECT', 'EDIT'}
             preview_row.scale_y = 1.1
             preview_row.operator(
                 "vct.preview_adjustments",
-                text="Live Preview",
+                text="Update Preview" if settings.preview_active else "Start Live Preview",
                 icon='HIDE_OFF',
                 depress=settings.preview_active,
             )
@@ -2325,7 +2329,13 @@ class VCT_PT_main(Panel):
                 status.label(text="Previewing temporary color data", icon='INFO')
 
             row = body.row(align=True)
-            row.operator("vct.apply_adjustments", text="Apply", icon='CHECKMARK')
+            apply_row = row.row(align=True)
+            apply_row.enabled = has_color_data and obj.mode in {'OBJECT', 'EDIT'}
+            apply_row.operator(
+                "vct.apply_adjustments",
+                text="Commit Preview" if settings.preview_active else "Apply Adjustment",
+                icon='CHECKMARK',
+            )
 
             cancel = row.row(align=True)
             cancel.enabled = settings.preview_active
@@ -2340,7 +2350,7 @@ class VCT_PT_main(Panel):
             shading = context.space_data.shading
             material_preview_active = (
                 settings.material_preview_active
-                and settings.material_preview_object_name == obj.name
+                and _preview_material_target_object(settings) == obj
             )
 
             body.label(text="Preview Mode")
@@ -2355,13 +2365,17 @@ class VCT_PT_main(Panel):
             )
             op.mode = 'SOLID'
 
-            op = row.operator(
+            material_row = row.row(align=True)
+            material_row.enabled = bool(obj.material_slots)
+            op = material_row.operator(
                 "vct.set_color_preview_mode",
                 text="Material Preview",
                 icon='MATERIAL',
                 depress=material_preview_active,
             )
             op.mode = 'MATERIAL'
+            if not obj.material_slots:
+                body.label(text="Material Preview needs a material slot.", icon='INFO')
 
             # Flat Lighting only has meaning in Solid View, so keep it
             # contextual instead of presenting it as a competing preview mode.
