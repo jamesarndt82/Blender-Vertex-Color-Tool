@@ -288,17 +288,33 @@ The Phase 2 smoke test covers Byte/Float attribute initialization, full-strength
 
 On Windows PowerShell, replace `blender` with `& "C:\\Program Files\\Blender Foundation\\Blender 5.2\\blender.exe"` and run each command separately.
 
-### Version 2.5.0 (development)
+### Version 2.5.1 (development)
 
-- Single Face/Vertex selector in the main panel
-- Clearer disabled controls and contextual setup guidance
-- Confirmation before deleting color attributes
-- Faster full-strength fills that convert the working color once
-- Single-pass BMesh corner collection for vertex selection
-- Bulk Blender RNA reads/writes for Object Mode HSV preview, commit, and new attribute initialization
-- Correct material-preview tracking even after object renaming
+This iteration preserves the Phase 2 UI and fill improvements, and adds:
 
-Performance and compatibility should be measured inside Blender; the Phase 2 code is not yet a released or benchmarked build.
+- Vectorized NumPy HSV color conversion for Object Mode previews (128+ face corners), with scalar `colorsys` fallback for small meshes or environments without NumPy
+- Float64 intermediate color math with Float32 storage, preserving the alpha channel
+- Coalescing repeated identical slider notifications without suppressing manual preview refreshes
+- Numerical regression tests comparing scalar and vectorized HSV math, including black, white, grayscale, primaries, byte-resolution and random colors
+- Expanded Blender smoke tests for Float Color HSV accuracy
+- A configurable benchmark that measures both the scalar baseline and optimized preview at approximately 100K and 1M face corners
+
+### Performance benchmark
+
+Use the `VCT_BENCH_GRID` environment variable to choose grid size (number of quad faces is `grid * grid`). The standard 160 grid produces 102,400 face corners; the 500 grid produces 1,000,000.
+
+In Windows PowerShell, from the repository root:
+
+```powershell
+$Blender = "C:\\Program Files\\Blender Foundation\\Blender 5.2\\blender.exe"
+$env:VCT_BENCH_GRID = "160"
+& $Blender --background --factory-startup --python tests\\blender_phase2_benchmark.py
+$env:VCT_BENCH_GRID = "500"
+& $Blender --background --factory-startup --python tests\\blender_phase2_benchmark.py
+Remove-Item Env:VCT_BENCH_GRID
+```
+
+Each test reports median timings and the measured scalar-versus-optimized speedup. These are **not** hardware-independent performance guarantees. Run the Blender Phase 2 smoke test after pulling new changes before relying on 2.5.1 for production assets.
 
 ## Advanced
 
