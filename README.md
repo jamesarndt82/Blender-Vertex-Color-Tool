@@ -1,4 +1,4 @@
-# Vertex Color Toolbox (Blender 5.2)
+# Vertex Color Toolbox (Blender 5.2+)
 
 <table>
   <tr>
@@ -28,7 +28,7 @@ The toolbox uses Blender's modern **Color Attribute** system and is designed pri
 * Uses **Face Corner Color Attributes**
 * Tested with **Byte Color** storage by default
 
-If the selected mesh does not already contain a compatible Color Attribute, the toolbox automatically creates a default `Color` attribute.
+If the selected mesh does not contain a compatible Color Attribute, use the **+** button at the top of the toolbox to create one explicitly. Merely selecting a mesh never changes it.
 
 ## Installation
 
@@ -52,14 +52,14 @@ In the 3D Viewport:
 
 1. Select a mesh object.
 2. Open the **VColor** panel.
-3. A `Color` attribute is created automatically if the mesh does not already contain a compatible Color Attribute.
+3. If needed, click **+** beside the Color Attribute selector to create a `Color` attribute.
 4. Choose **Face Mode** or **Vertex Mode**.
 5. Click the native Blender color swatch and choose a color.
 6. Set the **Strength**.
 7. Select faces or vertices.
 8. Click **Fill Selection**.
 
-The viewport is automatically configured to display the active Color Attribute in Solid View.
+To see vertex colors directly, open **Display → Solid Colors**. Enabling the add-on will not change your viewport shading.
 
 ## Face and Vertex Modes
 
@@ -226,7 +226,7 @@ The toolbox can temporarily create a preview material that reads the active Colo
 
 This allows vertex colors to be viewed with Blender's Material Preview lighting without permanently modifying the object's production materials.
 
-Turning Material Preview off restores the original material assignments.
+Turning Material Preview off restores the original material assignments. For safety, an object must already have a material slot to use this mode; otherwise, use **Solid Colors**. The preview does not add slots to shared mesh data.
 
 ### Flat Lighting
 
@@ -248,9 +248,9 @@ The toolbox keeps its active Color Attribute synchronized with Blender's native 
 
 Deleting Color Attributes directly through Blender's native panel is also handled safely.
 
-## Automatic Setup
+## First-Time Setup (Explicit)
 
-When the toolbox encounters a mesh without a compatible Color Attribute, it automatically creates:
+If a mesh does not have a compatible attribute, click the **+** icon next to the attribute selector. The default is:
 
 ```text
 Name: Color
@@ -259,7 +259,25 @@ Storage: Byte Color
 Default: White
 ```
 
-The viewport is also configured to display Color Attributes automatically.
+The toolbox does **not** create attributes when selecting objects, opening files, or enabling the add-on. It does not alter viewport shading until you choose a Display mode.
+
+### Temporary preview safety
+
+- **Material Preview** uses a newly created, temporary material instead of overwriting an existing material with a matching name.
+- Previewed material slots are changed at the **object** level, protecting other objects sharing the same mesh. Meshes without a material slot should use Solid Colors.
+- **Live HSV Preview** creates a temporary Color Attribute. Apply commits the result; Cancel removes the temporary attribute without changing the source.
+- Saving a Blender project automatically ends both preview types and restores original materials, so temporary preview data is not intentionally saved into the project.
+- Undo, redo, and loading a project trigger recovery of any tracked temporary preview state.
+
+### Testing
+
+The Python-only GitHub Actions checks compile the add-on and verify static safety contracts. These checks do **not** prove Blender runtime compatibility. For a clean Blender 5.2+ integration test, run:
+
+```bash
+blender --background --factory-startup --python tests/blender_phase1_smoke.py
+```
+
+The smoke test covers explicit attribute setup, shared meshes, material restoration after object renaming, HSV preview cancellation, and saving during previews.
 
 ## Advanced
 
@@ -308,12 +326,11 @@ Vertex Color Toolbox is useful for authoring data such as:
 * **Byte Color** is the default storage type.
 * The native Blender color picker is used for color selection.
 * Face and Vertex operations modify the same underlying Color Attribute.
-* Material Preview uses a temporary preview material and restores the object's original materials when disabled.
-* Live HSV Preview uses temporary color data until the adjustment is applied.
+* Material Preview uses an add-on-owned temporary material and restores the object's original material assignments when disabled or when the file is saved.
+* Live HSV Preview uses temporary color data until applied, and is cancelled on save or recovery events.
 * The toolbox includes protection against invalid active Color Attribute references when attributes are deleted externally through Blender's native interface.
+* Blender 5.2+ is the declared API target; runtime validation on each Blender patch release is still required.
 
 ## License
 
-Add your preferred license here.
-
-For a small open-source Blender add-on, the **MIT License** is a common option.
+MIT — see [LICENSE](LICENSE).
