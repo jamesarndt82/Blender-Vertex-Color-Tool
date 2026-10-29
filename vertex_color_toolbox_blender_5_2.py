@@ -29,160 +29,67 @@ from bpy.props import (
 
 
 # ------------------------------------------------------------------------
-# Automatic Setup
+# Transient preview lifecycle: no mutations on install, load, or selection.
 # ------------------------------------------------------------------------
 
-_VCT_MSG_OWNER = object()
-_VCT_SETUP_PENDING = False
 _VCT_PREVIOUS_LIGHTING = {}
 _VCT_PREVIOUS_SHADING_TYPE = {}
 _VCT_MATERIAL_PREVIEW_MATERIAL_NAME = "__VCT_VertexColorPreview__"
 
 
-def _initialize_color_attribute_for_object(obj):
-    """Ensure a compatible Face Corner color attribute exists and is active."""
-    if not obj or obj.type != 'MESH':
-        return None
+def _cleanup_all_previews():
+    """Rollback temporary changes in all scenes before saving/disabling."""
+    from types import SimpleNamespace
 
-    mesh = obj.data
+    for scene in bpy.data.scenes:
+        if not hasattr(scene, "vct_settings"):
+            continue
+        settings = scene.vct_settings
+        context = (bpy.context if bpy.context.scene == scene else
+                   SimpleNamespace(scene=scene, area=None, space_data=None))
 
-    corner_attrs = [
-        attr for attr in mesh.color_attributes
-        if attr.domain == 'CORNER'
-        and not attr.name.startswith(_PREVIEW_PREFIX)
-    ]
-
-    if corner_attrs:
-        active = get_safe_active_color_attribute(mesh)
-        if not active or active.domain != 'CORNER':
-            set_active_color_attribute(mesh, corner_attrs[0])
-            return corner_attrs[0]
-        return active
-
-    # Create directly in the current mode. No Object/Edit mode switching.
-    if obj.mode == 'EDIT':
-        bm = bmesh.from_edit_mesh(mesh)
-
-        base_name = 'Color'
-        name = base_name
-        suffix = 1
-        existing_names = {attr.name for attr in mesh.color_attributes}
-
-        while name in existing_names:
-            name = f'{base_name}.{suffix:03d}'
-            suffix += 1
-
-        layer = bm.loops.layers.color.new(name)
-
-        for face in bm.faces:
-            for loop in face.loops:
-                loop[layer] = (1.0, 1.0, 1.0, 1.0)
-
-        bmesh.update_edit_mesh(mesh, loop_triangles=False, destructive=False)
-
-        attr = mesh.color_attributes.get(name)
-        if attr:
-            set_active_color_attribute(mesh, attr)
-            try:
-                mesh.color_attributes.default_color_name = attr.name
-            except Exception:
-                pass
-
-        return attr
-
-    attr = mesh.color_attributes.new(
-        name='Color',
-        type='BYTE_COLOR',
-        domain='CORNER',
-    )
-
-    for element in attr.data:
-        element.color = (1.0, 1.0, 1.0, 1.0)
-
-    set_active_color_attribute(mesh, attr)
-
-    try:
-        mesh.color_attributes.default_color_name = attr.name
-    except Exception:
-        pass
-
-    return attr
+        # Restore original material slots before removing a temporary layer.
+        if settings.material_preview_active:
+            ok, message = _restore_material_preview(context)
+            if not ok:
+                print("Vertex Color Toolbox: restore materials:", message)
+        if settings.preview_active:
+            ok, message = _remove_preview_attribute(settings)
+            if not ok:
+                print("Vertex Color Toolbox: cancel preview:", message)
 
 
-def _setup_current_active_object():
-    """Initialize the current active mesh outside panel drawing."""
-    global _VCT_SETUP_PENDING
-    _VCT_SETUP_PENDING = False
-
-    try:
-        obj = bpy.context.active_object
-        if obj and obj.type == 'MESH':
-            _initialize_color_attribute_for_object(obj)
-    except Exception:
-        # Never let initialization interfere with Blender interaction.
-        pass
-
+def _deferred_preview_cleanup():
+    _cleanup_all_previews()
     return None
 
 
-def _schedule_active_object_setup():
-    global _VCT_SETUP_PENDING
-
-    if _VCT_SETUP_PENDING:
-        return
-
-    _VCT_SETUP_PENDING = True
-    bpy.app.timers.register(_setup_current_active_object, first_interval=0.0)
-
-
-def _on_active_object_changed():
-    # The message-bus callback only schedules setup. It does not touch panel UI
-    # and only fires when Blender's active object changes.
-    _schedule_active_object_setup()
-
-
-def _subscribe_active_object():
-    bpy.msgbus.clear_by_owner(_VCT_MSG_OWNER)
-    bpy.msgbus.subscribe_rna(
-        key=(bpy.types.LayerObjects, 'active'),
-        owner=_VCT_MSG_OWNER,
-        args=(),
-        notify=_on_active_object_changed,
-        options={'PERSISTENT'},
-    )
-
-
-def _set_default_viewport_display():
-    """Set existing 3D viewports to Solid + Color Attribute once."""
-    try:
-        for screen in bpy.data.screens:
-            for area in screen.areas:
-                if area.type != 'VIEW_3D':
-                    continue
-
-                space = area.spaces.active
-                if not space or space.type != 'VIEW_3D':
-                    continue
-
-                shading = space.shading
-                shading.type = 'SOLID'
-                shading.color_type = 'VERTEX'
-                area.tag_redraw()
-    except Exception:
-        pass
-
-
-def _initial_setup_timer():
-    _set_default_viewport_display()
-    _setup_current_active_object()
-    return None
+def _schedule_preview_cleanup():
+    if not bpy.app.timers.is_registered(_deferred_preview_cleanup):
+        bpy.app.timers.register(_deferred_preview_cleanup, first_interval=0.0)
 
 
 @persistent
 def _vct_load_post(_dummy):
-    # Blender clears message-bus subscriptions when a new .blend loads.
-    _subscribe_active_object()
-    bpy.app.timers.register(_initial_setup_timer, first_interval=0.0)
+    # Recover previews persisted by an older version or an interrupted session.
+    _schedule_preview_cleanup()
+
+
+@persistent
+def _vct_save_pre(_dummy):
+    # Temporary preview data should never be written into the project file.
+    _cleanup_all_previews()
+
+
+@persistent
+def _vct_undo_post(_dummy):
+    # Wait until undo/redo has restored Blender's RNA state.
+    _schedule_preview_cleanup()
+
+
+@persistent
+def _vct_redo_post(_dummy):
+    _schedule_preview_cleanup()
 
 
 # ------------------------------------------------------------------------
@@ -672,6 +579,8 @@ def fill_selection_with_color(context, color):
         return False, "Enter Edit Mode on a mesh first."
 
     settings = context.scene.vct_settings
+    if settings.preview_active:
+        return False, "Apply or Cancel Live Preview before filling colors."
     attr = get_active_corner_attribute(mesh)
 
     if not attr:
@@ -781,12 +690,12 @@ def _set_preview_active(settings, value):
 
 
 def _preview_target_object(settings):
-    if not settings.preview_object_name:
-        return None
-    return bpy.data.objects.get(settings.preview_object_name)
+    return (settings.preview_object
+            or bpy.data.objects.get(settings.preview_object_name))
 
 
 def _clear_preview_state(settings):
+    settings.preview_object = None
     settings.preview_object_name = ""
     settings.preview_source_name = ""
     settings.preview_temp_name = ""
@@ -1034,17 +943,15 @@ def _start_adjust_preview(context):
         bpy.ops.object.mode_set(mode='OBJECT')
 
     try:
-        # Clean up any stale preview attribute from a previous interrupted run.
-        for attr in list(mesh.color_attributes):
-            if attr.name.startswith(_PREVIEW_PREFIX):
-                mesh.color_attributes.remove(attr)
-
+        # Do not remove similarly named user data or an unrelated preview.
+        # Only the exact temporary attribute recorded below belongs to us.
         temp = mesh.color_attributes.new(
             name=_PREVIEW_PREFIX,
             type=source_type,
             domain='CORNER',
         )
 
+        settings.preview_object = obj
         settings.preview_object_name = obj.name
         settings.preview_source_name = source_name
         settings.preview_temp_name = temp.name
@@ -1288,6 +1195,11 @@ class VCT_Settings(PropertyGroup):
         default=False,
         options={'HIDDEN'},
         update=_on_preview_property_changed,
+    )
+
+    preview_object: PointerProperty(
+        type=bpy.types.Object,
+        options={'HIDDEN'},
     )
 
     preview_object_name: StringProperty(
@@ -2489,34 +2401,36 @@ def register():
     bpy.types.Scene.vct_palette_index = IntProperty(default=0)
     bpy.types.Scene.vct_material_preview_slots = CollectionProperty(type=VCT_MaterialPreviewSlot)
 
-    _subscribe_active_object()
+    for handlers, callback in (
+        (bpy.app.handlers.save_pre, _vct_save_pre),
+        (bpy.app.handlers.load_post, _vct_load_post),
+        (bpy.app.handlers.undo_post, _vct_undo_post),
+        (bpy.app.handlers.redo_post, _vct_redo_post),
+    ):
+        if callback not in handlers:
+            handlers.append(callback)
 
-    if _vct_load_post not in bpy.app.handlers.load_post:
-        bpy.app.handlers.load_post.append(_vct_load_post)
-
-    # Do the first setup after registration, before normal tool interaction.
-    bpy.app.timers.register(_initial_setup_timer, first_interval=0.0)
+    # No mesh or viewport changes when enabling the add-on.
 
 
 def unregister():
-    bpy.msgbus.clear_by_owner(_VCT_MSG_OWNER)
+    _cleanup_all_previews()
 
-    if _vct_load_post in bpy.app.handlers.load_post:
-        bpy.app.handlers.load_post.remove(_vct_load_post)
+    for handlers, callback in (
+        (bpy.app.handlers.save_pre, _vct_save_pre),
+        (bpy.app.handlers.load_post, _vct_load_post),
+        (bpy.app.handlers.undo_post, _vct_undo_post),
+        (bpy.app.handlers.redo_post, _vct_redo_post),
+    ):
+        if callback in handlers:
+            handlers.remove(callback)
+
+    for callback in (_deferred_preview_cleanup, _preview_timer):
+        if bpy.app.timers.is_registered(callback):
+            bpy.app.timers.unregister(callback)
 
     _VCT_PREVIOUS_LIGHTING.clear()
     _VCT_PREVIOUS_SHADING_TYPE.clear()
-
-    try:
-        scene = bpy.context.scene
-        if scene and hasattr(scene, "vct_settings"):
-            settings = scene.vct_settings
-            if settings.material_preview_active:
-                _restore_material_preview(bpy.context)
-            if settings.preview_active:
-                _remove_preview_attribute(settings)
-    except Exception:
-        pass
 
     del bpy.types.Scene.vct_material_preview_slots
     del bpy.types.Scene.vct_palette_index
