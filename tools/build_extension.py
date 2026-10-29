@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build the GPL-3.0-or-later Blender extension ZIP from one Python add-on.
+r"""Build the GPL-3.0-or-later Blender extension ZIP from one Python add-on.
 
 The same ZIP supports local installation, GitHub Releases, and submission to
 https://extensions.blender.org/submit/. The legacy single-file .py remains
@@ -32,6 +32,16 @@ REQUIRED_MANIFEST = (
 SPDX = b"# SPDX-License-Identifier: GPL-3.0-or-later\n"
 
 
+def normalized_text_bytes(path):
+    """Normalize checkout line endings/BOM for portable, identical ZIP contents.
+
+    Git on Windows can check out .py files with CRLF even though GitHub Actions
+    uses LF. Package with LF on every OS without modifying the working tree.
+    """
+    text = path.read_bytes().decode("utf-8-sig")
+    return text.replace("\r\n", "\n").replace("\r", "\n").encode("utf-8")
+
+
 def info():
     """Validate manifest consistency and GPL declaration before building."""
     manifest = tomllib.loads(MANIFEST.read_text(encoding="utf-8"))
@@ -55,7 +65,7 @@ def info():
     if manifest["version"].count(".") != 2:
         raise ValueError("Expected MAJOR.MINOR.PATCH version")
 
-    source = SOURCE.read_bytes()
+    source = normalized_text_bytes(SOURCE)
     if not source.startswith(SPDX):
         raise ValueError("Add-on source is missing the GPL-3.0-or-later SPDX header")
     tree = ast.parse(source.decode("utf-8"), filename=str(SOURCE))
@@ -82,9 +92,9 @@ def info():
 def files():
     """The only three package files: no tests, build tools or duplicate code."""
     return {
-        "__init__.py": SOURCE.read_bytes(),
-        "blender_manifest.toml": MANIFEST.read_bytes(),
-        "LICENSE": LICENSE.read_bytes(),
+        "__init__.py": normalized_text_bytes(SOURCE),
+        "blender_manifest.toml": normalized_text_bytes(MANIFEST),
+        "LICENSE": normalized_text_bytes(LICENSE),
     }
 
 
