@@ -1403,16 +1403,34 @@ class VCT_OT_delete_attribute(Operator):
     bl_idname = "vct.delete_attribute"
     bl_label = "Delete Active Color Attribute"
     bl_options = {'REGISTER', 'UNDO'}
+    bl_description = "Delete the selected Color Attribute and its stored colors"
+
+    def invoke(self, context, event):
+        obj = get_active_mesh_object(context)
+        attr = get_safe_active_color_attribute(obj.data) if obj else None
+        if attr is None:
+            return {'CANCELLED'}
+        return context.window_manager.invoke_confirm(
+            self, event,
+            title="Delete Color Attribute?",
+            message=f"Delete '{attr.name}' from '{obj.name}'?",
+            confirm_text="Delete Attribute",
+            icon='WARNING',
+        )
 
     @classmethod
     def poll(cls, context):
         obj = get_active_mesh_object(context)
-        return bool(obj and get_safe_active_color_attribute(obj.data))
+        return bool(
+            obj and get_safe_active_color_attribute(obj.data)
+            and not context.scene.vct_settings.preview_active
+        )
 
     def execute(self, context):
         settings = context.scene.vct_settings
         if settings.preview_active:
-            _cancel_adjust_preview(context)
+            self.report({'WARNING'}, "Apply or Cancel Live Preview before deleting.")
+            return {'CANCELLED'}
 
         obj = get_active_mesh_object(context)
         mesh = obj.data
