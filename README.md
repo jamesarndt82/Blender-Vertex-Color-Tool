@@ -278,6 +278,8 @@ The Python-only GitHub Actions checks compile the add-on and verify static safet
 ```bash
 blender --background --factory-startup --python tests/blender_phase1_smoke.py
 blender --background --factory-startup --python tests/blender_phase2_smoke.py
+# Optional timing-only benchmark:
+blender --background --factory-startup --python tests/blender_phase2_benchmark.py
 ```
 
 The Phase 1 smoke test covers explicit attribute setup, shared meshes, material restoration after object renaming, HSV preview cancellation, and saving during previews.
