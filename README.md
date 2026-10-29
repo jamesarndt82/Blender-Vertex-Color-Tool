@@ -1,4 +1,4 @@
-# Vertex Color Toolbox (Blender 5.2)
+# Vertex Color Toolbox (Blender 5.2+)
 
 <table>
   <tr>
@@ -17,28 +17,50 @@
 
 A compact Blender add-on for working with **Color Attributes (vertex colors)** directly on mesh objects.
 
-The workflow is inspired by the simplicity of **3ds Max VertexPaint**: choose a color, choose whether you are working with faces or vertices, control the strength, and fill the current selection.
+The workflow is inspired by the simplicity of **3ds Max VertexPaint**: choose a color, switch between Face or Vertex selection with one control, adjust strength, and fill the current selection.
 
 The toolbox uses Blender's modern **Color Attribute** system and is designed primarily for game-art workflows such as vertex tinting, masks, variation, gradients, and shader data.
 
 ## Requirements
 
-* **Blender 5.2**
-* Mesh objects
-* Uses **Face Corner Color Attributes**
-* Tested with **Byte Color** storage by default
+- **Blender 5.2 or newer** (tested with Blender 5.2.3 LTS)
+- A mesh object, with the **Face Corner** Color Attribute domain
+- The default color storage is **Byte Color**; Float Color is also supported
 
-If the selected mesh does not already contain a compatible Color Attribute, the toolbox automatically creates a default `Color` attribute.
+The toolbox does **not** automatically modify meshes or viewport settings when enabled or when objects are selected. If a mesh has no suitable Color Attribute, select **New** in the VColor sidebar.
 
 ## Installation
 
-### Install from `.py` File
+### Official Blender Extensions (after publication)
 
-1. Download the **vertex_color_toolbox_blender_5_2.py** file.
-2. In Blender, open **Edit → Preferences → Add-ons**.
-3. Open the Add-ons menu and choose **Install from Disk**.
-4. Select the `.py` file.
-5. Enable **Vertex Color Toolbox** in the Add-ons list.
+Once Blender's moderators approve the add-on, open **Edit → Preferences → Get Extensions**, search for **Vertex Color Toolbox**, and choose **Install**. Enable it if necessary. For future updates, use **Get Extensions → Check for Updates**; extensions do **not** update automatically.
+
+Until the listing is approved, install the development ZIP using the instructions below.
+
+### Install the ZIP locally (available now)
+
+1. Download the `vertex_color_toolbox-2.5.1.zip` build artifact from the [latest development CI run](https://github.com/jamesarndt82/Blender-Vertex-Color-Tool/actions/workflows/source-checks.yml) or build it locally using the commands below.
+2. In Blender, open **Edit → Preferences → Get Extensions**.
+3. Open the upper-right menu and choose **Install from Disk**.
+4. Select the downloaded **ZIP without extracting it**. Enable the extension if needed.
+5. Open a 3D Viewport, press **N**, and select the **VColor** tab.
+
+**Locally installed ZIPs belong to a local extension repository and do not receive official-platform update notifications.** Until the official listing is live, repeat the local installation process for newer versions. See the [Blender manual](https://docs.blender.org/manual/en/5.2/editors/preferences/extensions.html) for update behavior.
+
+### Upgrading from the older standalone add-on
+
+If you previously installed `vertex_color_toolbox_blender_5_2.py`:
+
+1. Save your work and finish or cancel any live previews.
+2. In **Edit → Preferences → Add-ons**, disable and remove the old standalone **Vertex Color Toolbox**.
+3. Restart Blender.
+4. Install the extension ZIP as described above.
+
+Do not enable both the legacy Python-file add-on and the ZIP extension at the same time: they register the same operators and sidebar panel.
+
+### Legacy installation (.py file)
+
+The single-file installer remains available for existing workflows. In **Edit → Preferences → Add-ons**, open the menu, choose **Install from Disk**, select `vertex_color_toolbox_blender_5_2.py`, then enable **Vertex Color Toolbox**. **New installations should use the ZIP.**
 
 ## Where to Find It
 
@@ -52,14 +74,16 @@ In the 3D Viewport:
 
 1. Select a mesh object.
 2. Open the **VColor** panel.
-3. A `Color` attribute is created automatically if the mesh does not already contain a compatible Color Attribute.
-4. Choose **Face Mode** or **Vertex Mode**.
+3. If needed, click **+** beside the Color Attribute selector to create a `Color` attribute.
+4. Choose **Face** or **Vertex** to enter Edit Mode.
 5. Click the native Blender color swatch and choose a color.
 6. Set the **Strength**.
 7. Select faces or vertices.
-8. Click **Fill Selection**.
+8. Click **Fill Selected Faces** or **Fill Selected Vertices**.
 
-The viewport is automatically configured to display the active Color Attribute in Solid View.
+The Face/Vertex buttons now also enter Edit Mode if needed. If an operation cannot run, its control is disabled, and the panel displays the next required step.
+
+To see vertex colors directly, open **Display → Solid Colors**. Enabling the add-on will not change your viewport shading.
 
 ## Face and Vertex Modes
 
@@ -182,7 +206,7 @@ Available controls:
 
 ### Live Preview
 
-Live Preview shows color adjustments on the mesh before they are committed.
+Click **Start Live Preview** to see color adjustments before committing them. While previewing, click **Commit Preview** to keep the result or **Cancel** to discard it. Without a preview, **Apply Adjustment** performs a one-shot adjustment.
 
 The original Color Attribute remains untouched until **Apply** is pressed.
 
@@ -226,7 +250,7 @@ The toolbox can temporarily create a preview material that reads the active Colo
 
 This allows vertex colors to be viewed with Blender's Material Preview lighting without permanently modifying the object's production materials.
 
-Turning Material Preview off restores the original material assignments.
+Turning Material Preview off restores the original material assignments. For safety, an object must already have a material slot to use this mode; otherwise, use **Solid Colors**. The preview does not add slots to shared mesh data.
 
 ### Flat Lighting
 
@@ -241,16 +265,16 @@ The Color Attribute selector at the top of the toolbox lets you switch between C
 Controls beside the selector allow you to:
 
 * Create a new Color Attribute
-* Delete the active Color Attribute
+* Delete the active Color Attribute after confirming the operation
 * Switch between existing Color Attributes
 
 The toolbox keeps its active Color Attribute synchronized with Blender's native **Object Data Properties → Color Attributes** panel.
 
 Deleting Color Attributes directly through Blender's native panel is also handled safely.
 
-## Automatic Setup
+## First-Time Setup (Explicit)
 
-When the toolbox encounters a mesh without a compatible Color Attribute, it automatically creates:
+If a mesh does not have a compatible attribute, click the **+** icon next to the attribute selector. The default is:
 
 ```text
 Name: Color
@@ -259,7 +283,62 @@ Storage: Byte Color
 Default: White
 ```
 
-The viewport is also configured to display Color Attributes automatically.
+The toolbox does **not** create attributes when selecting objects, opening files, or enabling the add-on. It does not alter viewport shading until you choose a Display mode.
+
+### Temporary preview safety
+
+- **Material Preview** uses a newly created, temporary material instead of overwriting an existing material with a matching name.
+- Previewed material slots are changed at the **object** level, protecting other objects sharing the same mesh. Meshes without a material slot should use Solid Colors.
+- **Live HSV Preview** creates a temporary Color Attribute. Apply commits the result; Cancel removes the temporary attribute without changing the source.
+- Saving a Blender project automatically ends both preview types and restores original materials, so temporary preview data is not intentionally saved into the project.
+- Undo, redo, and loading a project trigger recovery of any tracked temporary preview state.
+
+### Testing
+
+GitHub Actions compiles the add-on, checks both extension packaging and numerical/color behavior, and builds a GPL ZIP. These checks do **not** replace testing inside Blender. For Blender 5.2+ runtime integration, run:
+
+```bash
+blender --background --factory-startup --python tests/blender_phase1_smoke.py
+blender --background --factory-startup --python tests/blender_phase2_smoke.py
+# After building the extension ZIP:
+blender --background --factory-startup --python tests/blender_extension_smoke.py
+# Optional timing-only benchmark:
+blender --background --factory-startup --python tests/blender_phase2_benchmark.py
+```
+
+The Phase 1 smoke test covers explicit attribute setup, shared meshes, material restoration after object renaming, HSV preview cancellation, and saving during previews.
+
+The Phase 2 smoke test covers Byte/Float attribute initialization, full-strength face and vertex fills, alpha preservation, bulk HSV preview and commit accuracy. The extension smoke test loads the packaged add-on, verifies registration and basic operation, then unregisters cleanly.
+
+On Windows PowerShell, replace `blender` with `& "C:\\Program Files\\Blender Foundation\\Blender 5.2\\blender.exe"` and run each command separately.
+
+### Version 2.5.1 (development)
+
+This iteration preserves the Phase 2 UI and fill improvements, and adds:
+
+- Vectorized NumPy HSV color conversion for Object Mode previews (128+ face corners), with scalar `colorsys` fallback for small meshes or environments without NumPy
+- Float64 intermediate color math with Float32 storage, preserving the alpha channel
+- Coalescing repeated identical slider notifications without suppressing manual preview refreshes
+- Numerical regression tests comparing scalar and vectorized HSV math, including black, white, grayscale, primaries, byte-resolution and random colors
+- Expanded Blender smoke tests for Float Color HSV accuracy
+- A configurable benchmark that measures both the scalar baseline and optimized preview at approximately 100K and 1M face corners
+
+### Performance benchmark
+
+Use the `VCT_BENCH_GRID` environment variable to choose grid size (number of quad faces is `grid * grid`). The standard 160 grid produces 102,400 face corners; the 500 grid produces 1,000,000.
+
+In Windows PowerShell, from the repository root:
+
+```powershell
+$Blender = "C:\\Program Files\\Blender Foundation\\Blender 5.2\\blender.exe"
+$env:VCT_BENCH_GRID = "160"
+& $Blender --background --factory-startup --python tests\\blender_phase2_benchmark.py
+$env:VCT_BENCH_GRID = "500"
+& $Blender --background --factory-startup --python tests\\blender_phase2_benchmark.py
+Remove-Item Env:VCT_BENCH_GRID
+```
+
+Each test reports median timings and the measured scalar-versus-optimized speedup. These are **not** hardware-independent performance guarantees. Run the Blender Phase 2 smoke test after pulling new changes before relying on 2.5.1 for production assets.
 
 ## Advanced
 
@@ -308,12 +387,36 @@ Vertex Color Toolbox is useful for authoring data such as:
 * **Byte Color** is the default storage type.
 * The native Blender color picker is used for color selection.
 * Face and Vertex operations modify the same underlying Color Attribute.
-* Material Preview uses a temporary preview material and restores the object's original materials when disabled.
-* Live HSV Preview uses temporary color data until the adjustment is applied.
+* Material Preview uses an add-on-owned temporary material and restores the object's original material assignments when disabled or when the file is saved.
+* Live HSV Preview uses temporary color data until applied, and is cancelled on save or recovery events.
 * The toolbox includes protection against invalid active Color Attribute references when attributes are deleted externally through Blender's native interface.
+* Blender 5.2+ is the declared API target; runtime validation on each Blender patch release is still required.
 
 ## License
 
-Add your preferred license here.
+**GPL-3.0-or-later** — see [LICENSE](LICENSE).
 
-For a small open-source Blender add-on, the **MIT License** is a common option.
+Copyright © 2026 James Arndt.
+
+Versions previously distributed under MIT remain available under their original terms; the historical MIT license text is archived at [packaging/MIT-license-prior-to-2.5.1.txt](packaging/MIT-license-prior-to-2.5.1.txt). The current source code and all newly built extension ZIPs use GPL-3.0-or-later.
+
+## Build and submit to Blender Extensions
+
+Build a single ZIP from the existing add-on source:
+
+```powershell
+cd D:\Projects\Blender-Vertex-Color-Tool
+git switch development
+git pull
+$Blender = "C:\Program Files\Blender Foundation\Blender 5.2\blender.exe"
+python tools/build_extension.py --blender $Blender
+& $Blender --background --factory-startup --python tests\blender_extension_smoke.py
+```
+
+The resulting file is `dist/vertex_color_toolbox-2.5.1.zip`. The builder validates the GPL manifest, source SPDX header, version match, full GPL license, and packaged source. It normalizes Windows CRLF and Unix LF line endings into a consistent package. With `--blender` it also runs Blender's official extension validator and packager. The extension smoke test checks package load/unload, but does **not** substitute for testing an interactive install in Blender's Preferences.
+
+After the package smoke test, install the ZIP through **Get Extensions → Install from Disk** and verify the sidebar (Face and Vertex tools, HSV preview, palette, display modes) in a fresh Blender session. For public distribution, submit this same ZIP at [Blender Extensions](https://extensions.blender.org/submit/) using your Blender ID. Provide a description, up-to-date screenshots of version 2.5.1, and any metadata requested by reviewers. Blender moderates the submission before publication. No workflow submits or publishes the extension automatically.
+
+A copy-ready listing description, screenshot checklist, and reviewer-preparation instructions are available in [the Blender Extensions submission guide](docs/BLENDER_EXTENSIONS_SUBMISSION.md).
+
+GitHub Actions builds the same GPL-licensed ZIP for the `development` branch. The GitHub release workflow only prepares an unpublished draft after an explicit version tag.

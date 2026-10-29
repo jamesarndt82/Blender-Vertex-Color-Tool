@@ -1,0 +1,43 @@
+name: Python source checks
+
+on:
+  push:
+    branches: [development, main]
+  pull_request:
+
+jobs:
+  source-check:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Compile Blender add-on and Blender smoke script
+        run: |
+          python -m py_compile vertex_color_toolbox_blender_5_2.py
+          python -m py_compile tests/blender_phase1_smoke.py
+          python -m py_compile tests/blender_phase2_smoke.py
+          python -m py_compile tests/blender_phase2_benchmark.py
+          python -m py_compile tests/blender_extension_smoke.py
+          python -m py_compile tools/build_extension.py
+      - name: Install HSV numerical test dependency
+        run: python -m pip install "numpy>=1.26,<3"
+      - name: Run source contracts and scalar/vector HSV numerical comparisons
+        run: python -m unittest discover -s tests -p 'test_*.py' -v
+      - name: Build and verify distributable extension ZIP
+        run: |
+          python tools/build_extension.py
+          python tools/build_extension.py --verify dist/vertex_color_toolbox-2.5.1.zip
+      - name: Upload development installation ZIP
+        if: github.ref == 'refs/heads/development' && runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: vertex-color-toolbox-development
+          path: dist/*.zip
+          if-no-files-found: error
+          retention-days: 14

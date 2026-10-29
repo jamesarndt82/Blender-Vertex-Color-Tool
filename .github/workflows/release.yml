@@ -1,0 +1,54 @@
+name: Prepare draft release from version tag
+
+# No release is created by normal development pushes. A maintainer must
+# explicitly push a vX.Y.Z tag after Blender ZIP validation.
+on:
+  push:
+    tags:
+      - 'v[0-9]*.[0-9]*.[0-9]*'
+
+permissions:
+  contents: write
+
+jobs:
+  draft-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Check Git tag against extension version
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          python - <<'PY'
+          import os
+          import tomllib
+          from pathlib import Path
+          version = tomllib.loads(Path("blender_manifest.toml").read_text())["version"]
+          expected = "v" + version
+          actual = os.environ["TAG"]
+          if actual != expected:
+              raise SystemExit(f"Tag {actual} does not match manifest {expected}")
+          print(f"Release version verified: {actual}")
+          PY
+      - name: Compile sources
+        run: |
+          python -m py_compile vertex_color_toolbox_blender_5_2.py
+          python -m py_compile tools/build_extension.py
+          python -m py_compile tests/blender_extension_smoke.py
+      - name: Install test dependency
+        run: python -m pip install "numpy>=1.26,<3"
+      - name: Run all Python tests
+        run: python -m unittest discover -s tests -p 'test_*.py' -v
+      - name: Build and verify extension package
+        run: python tools/build_extension.py
+      - name: Create unpublished draft for manual Blender approval
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          prerelease: true
+          generate_release_notes: true
+          files: dist/*.zip
+          fail_on_unmatched_files: true
