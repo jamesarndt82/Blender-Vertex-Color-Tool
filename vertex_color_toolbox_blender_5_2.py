@@ -111,8 +111,13 @@ def get_safe_active_color_attribute(mesh):
 
 def _preview_material_target_object(settings):
     # Pointer survives renaming; the name supports previews from older files.
-    return (settings.material_preview_object
-            or bpy.data.objects.get(settings.material_preview_object_name))
+    try:
+        if settings.material_preview_object is not None:
+            return settings.material_preview_object
+    except ReferenceError:
+        pass
+    return (bpy.data.objects.get(settings.material_preview_object_name)
+            if settings.material_preview_object_name else None)
 
 
 def _get_material_preview_attribute_name(obj, settings):
@@ -251,20 +256,16 @@ def _restore_material_preview(context):
                     if saved.link == 'OBJECT':
                         slot.material = material
 
-        # Restore the viewport shading type used before preview.
-        if (
-            context.area
-            and context.area.type == 'VIEW_3D'
-            and context.space_data
-            and context.space_data.type == 'VIEW_3D'
-        ):
-            key = context.area.as_pointer()
-            previous = _VCT_PREVIOUS_SHADING_TYPE.pop(key, None)
-
-            if previous:
-                context.space_data.shading.type = previous
-
-            context.area.tag_redraw()
+        # File save/undo can run outside the initiating 3D viewport.
+        # Recover only viewports actually modified by the preview.
+        for screen in bpy.data.screens:
+            for area in screen.areas:
+                if area.type != 'VIEW_3D':
+                    continue
+                previous = _VCT_PREVIOUS_SHADING_TYPE.pop(area.as_pointer(), None)
+                if previous:
+                    area.spaces.active.shading.type = previous
+                    area.tag_redraw()
 
     except Exception as ex:
         return False, str(ex)
@@ -299,9 +300,10 @@ def _sync_material_preview_attribute(context):
         return
     settings.material_preview_attribute_name = attribute_name
 
-    for area in context.screen.areas:
-        if area.type == 'VIEW_3D':
-            area.tag_redraw()
+    if context.screen is not None:
+        for area in context.screen.areas:
+            if area.type == 'VIEW_3D':
+                area.tag_redraw()
 
 
 def _toggle_material_preview(context):
@@ -690,8 +692,13 @@ def _set_preview_active(settings, value):
 
 
 def _preview_target_object(settings):
-    return (settings.preview_object
-            or bpy.data.objects.get(settings.preview_object_name))
+    try:
+        if settings.preview_object is not None:
+            return settings.preview_object
+    except ReferenceError:
+        pass
+    return (bpy.data.objects.get(settings.preview_object_name)
+            if settings.preview_object_name else None)
 
 
 def _clear_preview_state(settings):
@@ -722,6 +729,7 @@ def _remove_preview_attribute(settings):
 
     active_obj = bpy.context.view_layer.objects.active
     was_edit = obj.mode == 'EDIT'
+    was_selected = obj.select_get()
 
     try:
         if was_edit:
@@ -750,6 +758,8 @@ def _remove_preview_attribute(settings):
 
         if active_obj and active_obj.name in bpy.context.view_layer.objects:
             bpy.context.view_layer.objects.active = active_obj
+        if obj.name in bpy.context.view_layer.objects:
+            obj.select_set(was_selected)
 
     _clear_preview_state(settings)
     return True, ""
@@ -857,9 +867,10 @@ def _apply_adjust_preview(context):
 
         bmesh.update_edit_mesh(mesh, loop_triangles=False, destructive=False)
 
-    for area in context.screen.areas:
-        if area.type == 'VIEW_3D':
-            area.tag_redraw()
+    if context.screen is not None:
+        for area in context.screen.areas:
+            if area.type == 'VIEW_3D':
+                area.tag_redraw()
 
     return True, ""
 
