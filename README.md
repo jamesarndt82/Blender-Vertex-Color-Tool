@@ -23,30 +23,44 @@ The toolbox uses Blender's modern **Color Attribute** system and is designed pri
 
 ## Requirements
 
-* **Blender 5.2**
-* Mesh objects
-* Uses **Face Corner Color Attributes**
-* Tested with **Byte Color** storage by default
+- **Blender 5.2 or newer** (tested with Blender 5.2.3 LTS)
+- A mesh object, with the **Face Corner** Color Attribute domain
+- The default color storage is **Byte Color**; Float Color is also supported
 
-If the selected mesh does not contain a compatible Color Attribute, use the **+** button at the top of the toolbox to create one explicitly. Merely selecting a mesh never changes it.
+The toolbox does **not** automatically modify meshes or viewport settings when enabled or when objects are selected. If a mesh has no suitable Color Attribute, select **New** in the VColor sidebar.
 
 ## Installation
 
-### Recommended: install the extension ZIP
+### Official Blender Extensions (after publication)
 
-Download `vertex_color_toolbox-2.5.1.zip` from a development build artifact or a GitHub Release (once published). In Blender 5.2+, open **Edit → Preferences → Get Extensions**, select the menu in the top-right, and choose **Install from Disk**. Select the ZIP file directly; **do not unzip it**. Enable the add-on if Blender prompts you.
+Once Blender's moderators approve the add-on, open **Edit → Preferences → Get Extensions**, search for **Vertex Color Toolbox**, and choose **Install**. Enable it if necessary. For future updates, use **Get Extensions → Check for Updates**; extensions do **not** update automatically.
 
-The **same GPL-3.0-or-later ZIP** is intended for both personal installations and submission to the official Blender Extensions platform. Once accepted there, use Blender's **Get Extensions** browser to install and update it normally.
+Until the listing is approved, install the development ZIP using the instructions below.
 
-When upgrading, disable and remove the older standalone `.py` add-on first if you installed it previously, to prevent duplicate UI panels or operator registrations. Save your work before upgrading.
+### Install the ZIP locally (available now)
 
-### Alternative: install from `.py` File
+1. Download the `vertex_color_toolbox-2.5.1.zip` build artifact from the [latest development CI run](https://github.com/jamesarndt82/Blender-Vertex-Color-Tool/actions/workflows/source-checks.yml) or build it locally using the commands below.
+2. In Blender, open **Edit → Preferences → Get Extensions**.
+3. Open the upper-right menu and choose **Install from Disk**.
+4. Select the downloaded **ZIP without extracting it**. Enable the extension if needed.
+5. Open a 3D Viewport, press **N**, and select the **VColor** tab.
 
-1. Download the **vertex_color_toolbox_blender_5_2.py** file.
-2. In Blender, open **Edit → Preferences → Add-ons**.
-3. Open the Add-ons menu and choose **Install from Disk**.
-4. Select the `.py` file.
-5. Enable **Vertex Color Toolbox** in the Add-ons list.
+**Locally installed ZIPs belong to a local extension repository and do not receive official-platform update notifications.** Until the official listing is live, repeat the local installation process for newer versions. See the [Blender manual](https://docs.blender.org/manual/en/5.2/editors/preferences/extensions.html) for update behavior.
+
+### Upgrading from the older standalone add-on
+
+If you previously installed `vertex_color_toolbox_blender_5_2.py`:
+
+1. Save your work and finish or cancel any live previews.
+2. In **Edit → Preferences → Add-ons**, disable and remove the old standalone **Vertex Color Toolbox**.
+3. Restart Blender.
+4. Install the extension ZIP as described above.
+
+Do not enable both the legacy Python-file add-on and the ZIP extension at the same time: they register the same operators and sidebar panel.
+
+### Legacy installation (.py file)
+
+The single-file installer remains available for existing workflows. In **Edit → Preferences → Add-ons**, open the menu, choose **Install from Disk**, select `vertex_color_toolbox_blender_5_2.py`, then enable **Vertex Color Toolbox**. **New installations should use the ZIP.**
 
 ## Where to Find It
 
@@ -61,7 +75,7 @@ In the 3D Viewport:
 1. Select a mesh object.
 2. Open the **VColor** panel.
 3. If needed, click **+** beside the Color Attribute selector to create a `Color` attribute.
-4. Choose **Face Mode** or **Vertex Mode**.
+4. Choose **Face** or **Vertex** to enter Edit Mode.
 5. Click the native Blender color swatch and choose a color.
 6. Set the **Strength**.
 7. Select faces or vertices.
@@ -281,18 +295,20 @@ The toolbox does **not** create attributes when selecting objects, opening files
 
 ### Testing
 
-The Python-only GitHub Actions checks compile the add-on and verify static safety contracts. These checks do **not** prove Blender runtime compatibility. For clean Blender 5.2+ integration tests, run:
+GitHub Actions compiles the add-on, checks both extension packaging and numerical/color behavior, and builds a GPL ZIP. These checks do **not** replace testing inside Blender. For Blender 5.2+ runtime integration, run:
 
 ```bash
 blender --background --factory-startup --python tests/blender_phase1_smoke.py
 blender --background --factory-startup --python tests/blender_phase2_smoke.py
+# After building the extension ZIP:
+blender --background --factory-startup --python tests/blender_extension_smoke.py
 # Optional timing-only benchmark:
 blender --background --factory-startup --python tests/blender_phase2_benchmark.py
 ```
 
 The Phase 1 smoke test covers explicit attribute setup, shared meshes, material restoration after object renaming, HSV preview cancellation, and saving during previews.
 
-The Phase 2 smoke test covers Byte/Float attribute initialization, full-strength face and vertex fills, alpha preservation, bulk HSV preview and commit accuracy.
+The Phase 2 smoke test covers Byte/Float attribute initialization, full-strength face and vertex fills, alpha preservation, bulk HSV preview and commit accuracy. The extension smoke test loads the packaged add-on, verifies registration and basic operation, then unregisters cleanly.
 
 On Windows PowerShell, replace `blender` with `& "C:\\Program Files\\Blender Foundation\\Blender 5.2\\blender.exe"` and run each command separately.
 
@@ -397,8 +413,8 @@ python tools/build_extension.py --blender $Blender
 & $Blender --background --factory-startup --python tests\blender_extension_smoke.py
 ```
 
-The resulting file is `dist/vertex_color_toolbox-2.5.1.zip`. The builder validates the GPL manifest, source SPDX header, version match, full GPL license, and packaged source. With `--blender` it also runs Blender's official extension validator and packager.
+The resulting file is `dist/vertex_color_toolbox-2.5.1.zip`. The builder validates the GPL manifest, source SPDX header, version match, full GPL license, and packaged source. It normalizes Windows CRLF and Unix LF line endings into a consistent package. With `--blender` it also runs Blender's official extension validator and packager. The extension smoke test checks package load/unload, but does **not** substitute for testing an interactive install in Blender's Preferences.
 
-After the package smoke test, install the ZIP through Blender's **Get Extensions → Install from Disk** interface and check the sidebar interactively. For an official public listing, upload that validated ZIP at [Blender Extensions submission](https://extensions.blender.org/submit/), and provide screenshots, a user-facing description, and any requested metadata. Uploading and final publication are intentionally manual; no workflow submits or publishes the extension automatically.
+After the package smoke test, install the ZIP through **Get Extensions → Install from Disk** and verify the sidebar (Face and Vertex tools, HSV preview, palette, display modes) in a fresh Blender session. For public distribution, submit this same ZIP at [Blender Extensions](https://extensions.blender.org/submit/) using your Blender ID. Provide a description, up-to-date screenshots of version 2.5.1, and any metadata requested by reviewers. Blender moderates the submission before publication. No workflow submits or publishes the extension automatically.
 
 GitHub Actions builds the same GPL-licensed ZIP for the `development` branch. The GitHub release workflow only prepares an unpublished draft after an explicit version tag.
