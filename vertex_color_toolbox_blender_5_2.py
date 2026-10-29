@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Vertex Color Toolbox",
     "author": "James Arndt",
-    "version": (2, 5, 0),
+    "version": (2, 5, 1),
     "blender": (5, 2, 0),
     "location": "3D View > Sidebar > VColor",
     "description": "Compact Edit Mode vertex-color workflow inspired by 3ds Max VertexPaint",
@@ -12,6 +12,13 @@ import bpy
 import bmesh
 import colorsys
 from array import array
+
+try:
+    import numpy as _np
+except ImportError:
+    # Blender includes NumPy by default; keep the add-on usable in custom
+    # Python environments where NumPy has been removed.
+    _np = None
 
 from bpy.app.handlers import persistent
 from mathutils import Color
@@ -693,6 +700,68 @@ def adjust_rgb(rgb, hue_offset, saturation_factor, value_factor):
     return colorsys.hsv_to_rgb(h, s, v)
 
 
+def _adjust_colors_buffer(values, hue_offset, saturation_factor, value_factor):
+    """Adjust an interleaved float32 RGBA buffer in place.
+
+    The source buffer is populated by Blender's foreach_get("color"). NumPy
+    uses vectorized HSV conversion (with float64 intermediates for stable
+    color matching); only RGB is changed, leaving alpha byte-for-byte intact.
+    The scalar path preserves the original colorsys algorithm.
+    """
+    count = len(values) // 4
+    if not count or (hue_offset == 0.0 and saturation_factor == 1.0
+                     and value_factor == 1.0):
+        return values
+
+    if _np is None or count < 128:
+        for index in range(0, len(values), 4):
+            r, g, b = adjust_rgb(
+                values[index:index + 3],
+                hue_offset, saturation_factor, value_factor
+            )
+            values[index:index + 3] = array('f', (r, g, b))
+        return values
+
+    rgba = _np.frombuffer(values, dtype=_np.float32).reshape((-1, 4))
+    rgb = rgba[:, :3].astype(_np.float64, copy=True)
+    red, green, blue = rgb[:, 0], rgb[:, 1], rgb[:, 2]
+    high = rgb.max(axis=1)
+    low = rgb.min(axis=1)
+    delta = high - low
+
+    saturation = _np.zeros_like(high)
+    _np.divide(delta, high, out=saturation, where=high != 0.0)
+
+    # Match colorsys tie-breaking (red, then green, then blue), including
+    # zero-chroma colors whose hue must be 0 before adding the offset.
+    hue = _np.zeros_like(high)
+    colored = delta != 0.0
+    r_max = colored & (red == high)
+    g_max = colored & ~r_max & (green == high)
+    b_max = colored & ~r_max & ~g_max
+    _np.divide(green - blue, delta, out=hue, where=r_max)
+    _np.divide(blue - red, delta, out=hue, where=g_max)
+    hue[g_max] += 2.0
+    _np.divide(red - green, delta, out=hue, where=b_max)
+    hue[b_max] += 4.0
+
+    hue = _np.mod(hue / 6.0 + hue_offset, 1.0)
+    saturation = _np.clip(saturation * saturation_factor, 0.0, 1.0)
+    value = _np.clip(high * value_factor, 0.0, 1.0)
+
+    sector_float = hue * 6.0
+    sector = _np.floor(sector_float).astype(_np.int8)
+    fraction = sector_float - sector
+    p = value * (1.0 - saturation)
+    q = value * (1.0 - saturation * fraction)
+    t = value * (1.0 - saturation * (1.0 - fraction))
+    sectors = [sector == index for index in range(5)]
+    rgba[:, 0] = _np.select(sectors, [value, q, p, p, t], default=value)
+    rgba[:, 1] = _np.select(sectors, [t, value, value, q, p], default=p)
+    rgba[:, 2] = _np.select(sectors, [p, p, t, value, value], default=q)
+    return values
+
+
 # ------------------------------------------------------------------------
 # Adjust Colors Live Preview
 # ------------------------------------------------------------------------
@@ -700,6 +769,16 @@ def adjust_rgb(rgb, hue_offset, saturation_factor, value_factor):
 _PREVIEW_TIMER_PENDING = False
 _PREVIEW_INTERNAL_CHANGE = False
 _PREVIEW_PREFIX = "__VCT_PREVIEW__"
+_PREVIEW_QUEUE_SIGNATURES = {}
+
+
+def _preview_signature(settings):
+    return (
+        settings.preview_temp_name,
+        settings.adjust_hue,
+        settings.adjust_saturation,
+        settings.adjust_value,
+    )
 
 
 def _set_preview_active(settings, value):
@@ -722,6 +801,7 @@ def _preview_target_object(settings):
 
 
 def _clear_preview_state(settings):
+    _PREVIEW_QUEUE_SIGNATURES.pop(settings.id_data.as_pointer(), None)
     settings.preview_object = None
     settings.preview_object_name = ""
     settings.preview_source_name = ""
@@ -841,13 +921,7 @@ def _apply_adjust_preview(context):
         hue = settings.adjust_hue
         saturation = settings.adjust_saturation
         value = settings.adjust_value
-        for index in range(0, len(values), 4):
-            rgb = adjust_rgb(
-                values[index:index + 3], hue, saturation, value
-            )
-            values[index] = rgb[0]
-            values[index + 1] = rgb[1]
-            values[index + 2] = rgb[2]
+        _adjust_colors_buffer(values, hue, saturation, value)
 
         temp.data.foreach_set("color", values)
         mesh.update()
@@ -925,7 +999,13 @@ def _on_adjustment_changed(self, context):
         return
 
     if self.preview_active:
-        _queue_preview_update()
+        # Blender can issue duplicate property notifications. Coalesce same
+        # values without suppressing explicit Update Preview operations.
+        key = self.id_data.as_pointer()
+        signature = _preview_signature(self)
+        if _PREVIEW_QUEUE_SIGNATURES.get(key) != signature:
+            _PREVIEW_QUEUE_SIGNATURES[key] = signature
+            _queue_preview_update()
 
 
 def _on_preview_property_changed(self, context):
@@ -1003,6 +1083,7 @@ def _start_adjust_preview(context):
         _remove_preview_attribute(settings)
         return False, message
 
+    _PREVIEW_QUEUE_SIGNATURES[settings.id_data.as_pointer()] = _preview_signature(settings)
     return True, ""
 
 
@@ -2503,6 +2584,7 @@ def unregister():
 
     _VCT_PREVIOUS_LIGHTING.clear()
     _VCT_PREVIOUS_SHADING_TYPE.clear()
+    _PREVIEW_QUEUE_SIGNATURES.clear()
 
     del bpy.types.Scene.vct_material_preview_slots
     del bpy.types.Scene.vct_palette_index
