@@ -22,7 +22,7 @@ class ExtensionPackageTests(unittest.TestCase):
         self.assertEqual(metadata["id"], "vertex_color_toolbox")
         self.assertEqual(metadata["type"], "add-on")
         self.assertEqual(metadata["blender_version_min"], "5.2.0")
-        self.assertEqual(metadata["license"], ["SPDX:MIT"])
+        self.assertEqual(metadata["license"], ["SPDX:GPL-3.0-or-later"])
         tree = ast.parse(SOURCE.read_text(encoding="utf-8"))
         bl_info = next(
             ast.literal_eval(node.value) for node in tree.body
@@ -30,6 +30,14 @@ class ExtensionPackageTests(unittest.TestCase):
             and any(isinstance(t, ast.Name) and t.id == "bl_info" for t in node.targets)
         )
         self.assertEqual(metadata["version"], ".".join(map(str, bl_info["version"])))
+        self.assertTrue(
+            SOURCE.read_text(encoding="utf-8").startswith(
+                "# SPDX-License-Identifier: GPL-3.0-or-later"
+            )
+        )
+        self.assertTrue((ROOT / "LICENSE").read_text(encoding="utf-8").startswith(
+            "GNU GENERAL PUBLIC LICENSE\nVersion 3, 29 June 2007"
+        ))
 
     def test_zip_is_valid_unchanged_source_and_reproducible(self):
         with tempfile.TemporaryDirectory() as directory:
