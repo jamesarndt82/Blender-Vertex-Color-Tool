@@ -1,0 +1,21 @@
+name: Python source checks
+
+on:
+  push:
+    branches: [development, main]
+  pull_request:
+
+jobs:
+  source-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Compile Blender add-on and Blender smoke script
+        run: |
+          python -m py_compile vertex_color_toolbox_blender_5_2.py
+          python -m py_compile tests/blender_phase1_smoke.py
+      - name: Verify Phase 1 safety contracts
+        run: python -m unittest discover -s tests -p 'test_source_*.py' -v
