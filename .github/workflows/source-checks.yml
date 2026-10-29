@@ -19,5 +19,7 @@ jobs:
           python -m py_compile tests/blender_phase1_smoke.py
           python -m py_compile tests/blender_phase2_smoke.py
           python -m py_compile tests/blender_phase2_benchmark.py
-      - name: Verify Phase 1 safety contracts
-        run: python -m unittest discover -s tests -p 'test_source_*.py' -v
+      - name: Install HSV numerical test dependency
+        run: python -m pip install "numpy>=1.26,<3"
+      - name: Run source contracts and scalar/vector HSV numerical comparisons
+        run: python -m unittest discover -s tests -p 'test_*.py' -v
