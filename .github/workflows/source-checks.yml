@@ -17,5 +17,6 @@ jobs:
         run: |
           python -m py_compile vertex_color_toolbox_blender_5_2.py
           python -m py_compile tests/blender_phase1_smoke.py
+          python -m py_compile tests/blender_phase2_smoke.py
       - name: Verify Phase 1 safety contracts
         run: python -m unittest discover -s tests -p 'test_source_*.py' -v
