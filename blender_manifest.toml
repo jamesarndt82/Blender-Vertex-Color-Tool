@@ -1,0 +1,13 @@
+schema_version = "1.0.0"
+id = "vertex_color_toolbox"
+version = "2.5.1"
+name = "Vertex Color Toolbox"
+tagline = "Fast vertex color painting for mesh artists"
+maintainer = "James Arndt"
+type = "add-on"
+website = "https://github.com/jamesarndt82/Blender-Vertex-Color-Tool"
+blender_version_min = "5.2.0"
+license = ["SPDX:MIT"]
+
+# This manifest is for GitHub-distributed installation ZIPs.
+# The official Blender Extensions Platform currently requires GPL licensing.
