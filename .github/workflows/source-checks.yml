@@ -7,7 +7,11 @@ on:
 
 jobs:
   source-check:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -30,7 +34,7 @@ jobs:
           python tools/build_extension.py
           python tools/build_extension.py --verify dist/vertex_color_toolbox-2.5.1.zip
       - name: Upload development installation ZIP
-        if: github.ref == 'refs/heads/development'
+        if: github.ref == 'refs/heads/development' && runner.os == 'Linux'
         uses: actions/upload-artifact@v4
         with:
           name: vertex-color-toolbox-development
