@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (c) 2026 James Arndt
+
 bl_info = {
     "name": "Vertex Color Toolbox",
     "author": "James Arndt",
