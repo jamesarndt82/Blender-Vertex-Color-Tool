@@ -152,6 +152,31 @@ try:
                 for v in mesh.color_attributes.active_color.data),
             "Float initialization failed")
 
+    # Check vectorized Object Mode HSV against the scalar reference for Float
+    # attributes too, including alpha preservation and correct cancellation.
+    float_source = mesh.color_attributes.active_color
+    float_source.data[0].color = (.13, .65, .82, .27)
+    float_source.data[1].color = (.7, .2, .9, .89)
+    originals = [tuple(item.color) for item in float_source.data]
+    settings.adjust_hue = -.15
+    settings.adjust_saturation = 1.7
+    settings.adjust_value = .65
+    ok, message = vct._start_adjust_preview(bpy.context)
+    require(ok, "Float HSV preview failed: " + message)
+    float_temp = mesh.color_attributes.get(settings.preview_temp_name)
+    require(float_temp is not None, "Float HSV temporary attribute missing")
+    for original, adjusted in zip(originals, float_temp.data):
+        expected_rgb = vct.adjust_rgb(original[:3], -.15, 1.7, .65)
+        require(near(adjusted.color[:3], expected_rgb, 0.00002),
+                "Float HSV vectorized result differs from scalar reference")
+        require(abs(adjusted.color[3] - original[3]) < 0.000001,
+                "Float HSV preview changed alpha")
+    ok, message = vct._cancel_adjust_preview(bpy.context)
+    require(ok, "Float HSV cancel failed: " + message)
+    require(all(near(item.color, original, 0.000001)
+                for item, original in zip(float_source.data, originals)),
+            "Float HSV cancellation changed the source")
+
     print("VCT PHASE 2 BLENDER SMOKE: PASS")
 finally:
     vct.unregister()
