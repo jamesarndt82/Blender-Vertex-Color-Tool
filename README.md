@@ -417,4 +417,6 @@ The resulting file is `dist/vertex_color_toolbox-2.5.1.zip`. The builder validat
 
 After the package smoke test, install the ZIP through **Get Extensions → Install from Disk** and verify the sidebar (Face and Vertex tools, HSV preview, palette, display modes) in a fresh Blender session. For public distribution, submit this same ZIP at [Blender Extensions](https://extensions.blender.org/submit/) using your Blender ID. Provide a description, up-to-date screenshots of version 2.5.1, and any metadata requested by reviewers. Blender moderates the submission before publication. No workflow submits or publishes the extension automatically.
 
+A copy-ready listing description, screenshot checklist, and reviewer-preparation instructions are available in [the Blender Extensions submission guide](docs/BLENDER_EXTENSIONS_SUBMISSION.md).
+
 GitHub Actions builds the same GPL-licensed ZIP for the `development` branch. The GitHub release workflow only prepares an unpublished draft after an explicit version tag.
